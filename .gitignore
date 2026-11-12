@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### SmartStock: configuração local e segredos ###
+.env
+application-local.properties
