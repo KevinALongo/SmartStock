@@ -62,7 +62,28 @@ public interface EstoqueRepository extends JpaRepository<Lote, Long> {
         WHERE l.produto.id = :produtoId
           AND l.quantidadeAtual > 0
           AND (l.dataValidade IS NULL OR l.dataValidade >= :hoje)
-        ORDER BY CASE WHEN l.dataValidade IS NULL THEN 1 ELSE 0 END, l.dataValidade ASC
+        ORDER BY CASE WHEN l.dataValidade IS NULL THEN 1 ELSE 0 END, l.dataValidade ASC, l.id ASC
         """)
     List<Lote> buscarLotesDisponiveis(@Param("produtoId") Long produtoId, @Param("hoje") LocalDate hoje);
+
+    /** Mesma ordem FEFO da baixa, mas só para consulta (sem travar as linhas). */
+    @Query("""
+        SELECT l FROM Lote l
+        WHERE l.produto.id = :produtoId
+          AND l.quantidadeAtual > 0
+          AND (l.dataValidade IS NULL OR l.dataValidade >= :hoje)
+        ORDER BY CASE WHEN l.dataValidade IS NULL THEN 1 ELSE 0 END, l.dataValidade ASC, l.id ASC
+        """)
+    List<Lote> consultarLotesDisponiveis(@Param("produtoId") Long produtoId, @Param("hoje") LocalDate hoje);
+
+    /** Lotes disponíveis de vários produtos de uma vez (evita uma consulta por produto na listagem de preços). */
+    @Query("""
+        SELECT l FROM Lote l
+        WHERE l.produto.id IN :produtoIds
+          AND l.quantidadeAtual > 0
+          AND (l.dataValidade IS NULL OR l.dataValidade >= :hoje)
+        ORDER BY CASE WHEN l.dataValidade IS NULL THEN 1 ELSE 0 END, l.dataValidade ASC, l.id ASC
+        """)
+    List<Lote> consultarLotesDisponiveisDosProdutos(@Param("produtoIds") List<Long> produtoIds,
+                                                    @Param("hoje") LocalDate hoje);
 }

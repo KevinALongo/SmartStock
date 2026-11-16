@@ -12,8 +12,10 @@ import java.time.LocalDate;
 @Table(name = "lotes")
 public class Lote {
 
+    // Nomes lógicos: o nome real no banco vem de smartstock.banco.nomes.* (veja MapeamentoNomesFisicos).
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "pk_lote")
     private Long id;
 
     @ManyToOne

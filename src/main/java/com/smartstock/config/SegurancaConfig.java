@@ -3,6 +3,7 @@ package com.smartstock.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -25,12 +26,26 @@ public class SegurancaConfig {
 
     private static final int TAMANHO_MINIMO_SENHA = 8;
 
+    /**
+     * Com smartstock.somente-leitura=true (variável SOMENTE_LEITURA), a API só consulta: libera GET e o
+     * disparo do aviso, e bloqueia cadastro, entrada, baixa e exclusão. Use quando o banco pertence a
+     * outro sistema (ERP/PDV) e o SmartStock deve apenas ler e avisar.
+     */
     @Bean
-    SecurityFilterChain filtros(HttpSecurity http) throws Exception {
+    SecurityFilterChain filtros(HttpSecurity http,
+                                @Value("${smartstock.somente-leitura:false}") boolean somenteLeitura) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+                .authorizeHttpRequests(a -> {
+                    if (somenteLeitura) {
+                        a.requestMatchers(HttpMethod.GET, "/api/**").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/api/avisos/enviar").authenticated()
+                                .anyRequest().denyAll();
+                    } else {
+                        a.anyRequest().authenticated();
+                    }
+                })
                 .httpBasic(Customizer.withDefaults());
         return http.build();
     }

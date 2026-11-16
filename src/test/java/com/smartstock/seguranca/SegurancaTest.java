@@ -66,4 +66,23 @@ class SegurancaTest {
         int status = mvc.perform(get("/api/estoque/alertas-validade")).andReturn().getResponse().getStatus();
         assertEquals(401, status);
     }
+
+    @Test
+    void precosAtuaisRetornamListaPaginada() throws Exception {
+        var resposta = mvc.perform(get("/api/produtos/precos-atuais?page=0&size=5")
+                .header(HttpHeaders.AUTHORIZATION, basic("admin", "senha-de-teste")))
+                .andReturn().getResponse();
+
+        assertEquals(200, resposta.getStatus());
+        assertTrue(resposta.getContentAsString().contains("\"content\""));
+    }
+
+    @Test
+    void precoAtualDeProdutoInexistenteRetorna404() throws Exception {
+        int status = mvc.perform(get("/api/produtos/987654321/preco-atual")
+                .header(HttpHeaders.AUTHORIZATION, basic("admin", "senha-de-teste")))
+                .andReturn().getResponse().getStatus();
+
+        assertEquals(404, status);
+    }
 }

@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -26,6 +27,7 @@ class AvisoDiarioTest {
     @Autowired AvisoDiario aviso;
     @Autowired ProdutoService produtos;
     @Autowired EstoqueService estoque;
+    @Autowired Clock clock;
 
     @Test
     void semAlertasNaoEnviaNada() {
@@ -35,7 +37,7 @@ class AvisoDiarioTest {
     @Test
     void contaAlertasDeValidadeEReposicao() {
         Produto p = produtos.criar(new ProdutoRequest("999", "Iogurte", "Laticínios", new BigDecimal("4.00"), 10));
-        estoque.registrarEntrada(new LoteRequest(p.getId(), 2, LocalDate.now().plusDays(1)));
+        estoque.registrarEntrada(new LoteRequest(p.getId(), 2, LocalDate.now(clock).plusDays(1)));
 
         // 1 alerta de validade (vence amanhã) + 1 de reposição (2 un. contra mínimo de 10)
         assertEquals(2, aviso.enviar());

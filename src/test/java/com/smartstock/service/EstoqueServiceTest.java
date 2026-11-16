@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -28,6 +29,7 @@ class EstoqueServiceTest {
     @Autowired EstoqueService estoque;
     @Autowired ProdutoService produtos;
     @Autowired EstoqueRepository lotes;
+    @Autowired Clock clock;
 
     private Produto novoProduto(String codigo, int minimo) {
         return produtos.criar(new ProdutoRequest(codigo, "Leite", "Laticínios", new BigDecimal("10.00"), minimo));
@@ -36,7 +38,7 @@ class EstoqueServiceTest {
     @Test
     void baixaConsomePrimeiroOLoteQueVenceAntes() {
         Produto p = novoProduto("111", 0);
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = LocalDate.now(clock);
         estoque.registrarEntrada(new LoteRequest(p.getId(), 5, hoje.plusDays(30)));
         estoque.registrarEntrada(new LoteRequest(p.getId(), 5, hoje.plusDays(3)));
 
@@ -50,7 +52,7 @@ class EstoqueServiceTest {
     @Test
     void baixaMaiorQueOEstoqueEhRecusada() {
         Produto p = novoProduto("222", 0);
-        estoque.registrarEntrada(new LoteRequest(p.getId(), 2, LocalDate.now().plusDays(20)));
+        estoque.registrarEntrada(new LoteRequest(p.getId(), 2, LocalDate.now(clock).plusDays(20)));
 
         assertThrows(RegraDeNegocioException.class,
                 () -> estoque.registrarBaixa(new BaixaRequest(p.getId(), 3)));
@@ -60,13 +62,13 @@ class EstoqueServiceTest {
     void entradaDeLoteVencidoEhRecusada() {
         Produto p = novoProduto("333", 0);
         assertThrows(RegraDeNegocioException.class, () ->
-                estoque.registrarEntrada(new LoteRequest(p.getId(), 1, LocalDate.now().minusDays(1))));
+                estoque.registrarEntrada(new LoteRequest(p.getId(), 1, LocalDate.now(clock).minusDays(1))));
     }
 
     @Test
     void alertaDeValidadeAplicaDesconto() {
         Produto p = novoProduto("444", 0);
-        estoque.registrarEntrada(new LoteRequest(p.getId(), 4, LocalDate.now().plusDays(1)));
+        estoque.registrarEntrada(new LoteRequest(p.getId(), 4, LocalDate.now(clock).plusDays(1)));
 
         List<AlertaValidade> alertas = estoque.alertasValidade(PAGINA).getContent();
 
@@ -81,7 +83,7 @@ class EstoqueServiceTest {
         Lote vencido = new Lote();
         vencido.setProduto(p);
         vencido.setQuantidadeAtual(10);
-        vencido.setDataValidade(LocalDate.now().minusDays(2));
+        vencido.setDataValidade(LocalDate.now(clock).minusDays(2));
         lotes.save(vencido);
 
         List<AlertaReposicao> alertas = estoque.alertasReposicao(PAGINA).getContent();
@@ -115,5 +117,22 @@ class EstoqueServiceTest {
         assertEquals(3, pagina.getTotalElements());
         assertEquals(2, pagina.getContent().size());
         assertEquals(3, estoque.todosAlertasReposicao().size());
+    }
+
+    @Test
+    void baixaAplicaODescontoDeCadaLoteERetornaOValorTotal() {
+        Produto p = novoProduto("666", 0);
+        LocalDate hoje = LocalDate.now(clock);
+        estoque.registrarEntrada(new LoteRequest(p.getId(), 2, hoje.plusDays(1)));   // 50% -> 5.00
+        estoque.registrarEntrada(new LoteRequest(p.getId(), 5, hoje.plusDays(20)));  // sem desconto -> 10.00
+
+        BaixaResponse r = estoque.registrarBaixa(new BaixaRequest(p.getId(), 3));
+
+        // 2 un. a 5.00 + 1 un. a 10.00
+        assertEquals(0, new BigDecimal("20.00").compareTo(r.valorTotal()));
+        assertEquals(2, r.itens().size());
+        assertEquals(50, r.itens().get(0).percentualDesconto());
+        assertEquals(0, r.itens().get(1).percentualDesconto());
+        assertEquals(4, r.estoqueRestante());
     }
 }

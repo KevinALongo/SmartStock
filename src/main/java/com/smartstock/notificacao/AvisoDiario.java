@@ -29,7 +29,7 @@ public class AvisoDiario {
         this.notificador = notificador;
     }
 
-    @Scheduled(cron = "${smartstock.notificacao.cron:0 0 8 * * *}", zone = "America/Sao_Paulo")
+    @Scheduled(cron = "${smartstock.notificacao.cron:0 0 8 * * *}", zone = "${smartstock.fuso:America/Sao_Paulo}")
     public void agendado() {
         enviar();
     }
