@@ -8,6 +8,9 @@ import com.smartstock.repository.EstoqueRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -19,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @Transactional
 class EstoqueServiceTest {
+
+    private static final Pageable PAGINA = PageRequest.of(0, 50);
 
     @Autowired EstoqueService estoque;
     @Autowired ProdutoService produtos;
@@ -39,7 +44,7 @@ class EstoqueServiceTest {
 
         assertEquals(3, r.estoqueRestante());
         // o lote de 3 dias foi zerado, então não gera mais alerta de validade
-        assertTrue(estoque.alertasValidade().isEmpty());
+        assertTrue(estoque.alertasValidade(PAGINA).isEmpty());
     }
 
     @Test
@@ -63,7 +68,7 @@ class EstoqueServiceTest {
         Produto p = novoProduto("444", 0);
         estoque.registrarEntrada(new LoteRequest(p.getId(), 4, LocalDate.now().plusDays(1)));
 
-        List<AlertaValidade> alertas = estoque.alertasValidade();
+        List<AlertaValidade> alertas = estoque.alertasValidade(PAGINA).getContent();
 
         assertEquals(1, alertas.size());
         assertEquals(0, new BigDecimal("5.00").compareTo(alertas.get(0).precoComDesconto()));
@@ -79,8 +84,36 @@ class EstoqueServiceTest {
         vencido.setDataValidade(LocalDate.now().minusDays(2));
         lotes.save(vencido);
 
-        List<AlertaReposicao> alertas = estoque.alertasReposicao();
+        List<AlertaReposicao> alertas = estoque.alertasReposicao(PAGINA).getContent();
 
         assertTrue(alertas.stream().anyMatch(a -> a.produto().equals("Leite") && a.estoqueAtual() == 0));
+    }
+
+    @Test
+    void listagemDeProdutosEhPaginada() {
+        novoProduto("A1", 0);
+        novoProduto("A2", 0);
+        novoProduto("A3", 0);
+
+        Page<Produto> primeira = produtos.listar(PageRequest.of(0, 2));
+        Page<Produto> segunda = produtos.listar(PageRequest.of(1, 2));
+
+        assertEquals(3, primeira.getTotalElements());
+        assertEquals(2, primeira.getTotalPages());
+        assertEquals(2, primeira.getContent().size());
+        assertEquals(1, segunda.getContent().size());
+    }
+
+    @Test
+    void alertasDeReposicaoSaoPaginadosEContados() {
+        novoProduto("B1", 5);
+        novoProduto("B2", 5);
+        novoProduto("B3", 5);
+
+        Page<AlertaReposicao> pagina = estoque.alertasReposicao(PageRequest.of(0, 2));
+
+        assertEquals(3, pagina.getTotalElements());
+        assertEquals(2, pagina.getContent().size());
+        assertEquals(3, estoque.todosAlertasReposicao().size());
     }
 }

@@ -3,6 +3,8 @@ package com.smartstock.repository;
 import com.smartstock.dto.AlertaReposicao;
 import com.smartstock.model.Lote;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -17,17 +19,24 @@ public interface EstoqueRepository extends JpaRepository<Lote, Long> {
 
     boolean existsByProdutoId(Long produtoId);
 
-    @Query("""
+    /** Lotes com validade até a data-limite (inclui vencidos), do que vence primeiro ao último. */
+    @Query(value = """
         SELECT l FROM Lote l JOIN FETCH l.produto p
         WHERE l.quantidadeAtual > 0
           AND l.dataValidade IS NOT NULL
           AND l.dataValidade <= :limite
-        ORDER BY l.dataValidade ASC
+        ORDER BY l.dataValidade ASC, l.id ASC
+        """,
+        countQuery = """
+        SELECT COUNT(l) FROM Lote l
+        WHERE l.quantidadeAtual > 0
+          AND l.dataValidade IS NOT NULL
+          AND l.dataValidade <= :limite
         """)
-    List<Lote> buscarLotesAteData(@Param("limite") LocalDate limite);
+    Page<Lote> buscarLotesAteData(@Param("limite") LocalDate limite, Pageable pageable);
 
     /** Produtos cujo estoque válido (não vencido) está abaixo do mínimo. */
-    @Query("""
+    @Query(value = """
         SELECT new com.smartstock.dto.AlertaReposicao(
             p.nome, COALESCE(SUM(l.quantidadeAtual), 0L), p.estoqueMinimo, p.categoria)
         FROM Produto p
@@ -35,8 +44,16 @@ public interface EstoqueRepository extends JpaRepository<Lote, Long> {
                         AND (l.dataValidade IS NULL OR l.dataValidade >= :hoje)
         GROUP BY p.id, p.nome, p.estoqueMinimo, p.categoria
         HAVING COALESCE(SUM(l.quantidadeAtual), 0L) < p.estoqueMinimo
+        ORDER BY p.nome ASC
+        """,
+        countQuery = """
+        SELECT COUNT(p) FROM Produto p
+        WHERE p.estoqueMinimo > (
+            SELECT COALESCE(SUM(l.quantidadeAtual), 0L) FROM Lote l
+            WHERE l.produto = p
+              AND (l.dataValidade IS NULL OR l.dataValidade >= :hoje))
         """)
-    List<AlertaReposicao> buscarProdutosAbaixoDoMinimo(@Param("hoje") LocalDate hoje);
+    Page<AlertaReposicao> buscarProdutosAbaixoDoMinimo(@Param("hoje") LocalDate hoje, Pageable pageable);
 
     /** Lotes disponíveis para venda, do que vence primeiro ao que vence por último (FEFO). Sem validade vai por último. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

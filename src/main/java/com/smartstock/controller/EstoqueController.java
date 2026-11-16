@@ -4,11 +4,11 @@ import com.smartstock.dto.*;
 import com.smartstock.model.Lote;
 import com.smartstock.service.EstoqueService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/estoque")
@@ -21,18 +21,21 @@ public class EstoqueController {
     }
 
     @GetMapping("/alertas-validade")
-    public ResponseEntity<List<AlertaValidade>> validade() {
-        return ResponseEntity.ok(service.alertasValidade());
+    public PagedModel<AlertaValidade> validade(@RequestParam(defaultValue = "0") int page,
+                                               @RequestParam(defaultValue = "20") int size) {
+        return new PagedModel<>(service.alertasValidade(Paginacao.de(page, size)));
     }
 
     @GetMapping("/alertas-reposicao")
-    public ResponseEntity<List<AlertaReposicao>> reposicao() {
-        return ResponseEntity.ok(service.alertasReposicao());
+    public PagedModel<AlertaReposicao> reposicao(@RequestParam(defaultValue = "0") int page,
+                                                 @RequestParam(defaultValue = "20") int size) {
+        return new PagedModel<>(service.alertasReposicao(Paginacao.de(page, size)));
     }
 
     @GetMapping("/lotes")
-    public List<Lote> lotes() {
-        return service.listarLotes();
+    public PagedModel<Lote> lotes(@RequestParam(defaultValue = "0") int page,
+                                  @RequestParam(defaultValue = "20") int size) {
+        return new PagedModel<>(service.listarLotes(Paginacao.de(page, size, Sort.by("id"))));
     }
 
     @PostMapping("/lotes")

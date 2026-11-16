@@ -6,10 +6,10 @@ import com.smartstock.exception.RegraDeNegocioException;
 import com.smartstock.model.Produto;
 import com.smartstock.repository.EstoqueRepository;
 import com.smartstock.repository.ProdutoRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class ProdutoService {
@@ -23,8 +23,8 @@ public class ProdutoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Produto> listar() {
-        return produtos.findAll();
+    public Page<Produto> listar(Pageable pageable) {
+        return produtos.findAll(pageable);
     }
 
     @Transactional(readOnly = true)

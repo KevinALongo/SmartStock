@@ -4,11 +4,11 @@ import com.smartstock.dto.ProdutoRequest;
 import com.smartstock.model.Produto;
 import com.smartstock.service.ProdutoService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/produtos")
@@ -20,9 +20,11 @@ public class ProdutoController {
         this.service = service;
     }
 
+    /** Lista paginada, ordenada por nome. Parâmetros: page (começa em 0) e size (máx. 100). */
     @GetMapping
-    public List<Produto> listar() {
-        return service.listar();
+    public PagedModel<Produto> listar(@RequestParam(defaultValue = "0") int page,
+                                      @RequestParam(defaultValue = "20") int size) {
+        return new PagedModel<>(service.listar(Paginacao.de(page, size, Sort.by("nome"))));
     }
 
     @GetMapping("/{id}")

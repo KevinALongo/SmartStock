@@ -7,22 +7,23 @@ import com.smartstock.model.Lote;
 import com.smartstock.model.Produto;
 import com.smartstock.repository.EstoqueRepository;
 import com.smartstock.repository.ProdutoRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class EstoqueService {
 
-    private static final Logger log = LoggerFactory.getLogger(EstoqueService.class);
+    private static final int TAMANHO_LOTE_INTERNO = 500;
 
     private final EstoqueRepository repository;
     private final ProdutoRepository produtos;
@@ -38,48 +39,70 @@ public class EstoqueService {
     // ---------- Alertas ----------
 
     @Transactional(readOnly = true)
-    public List<AlertaValidade> alertasValidade() {
+    public Page<AlertaValidade> alertasValidade(Pageable pageable) {
         LocalDate hoje = LocalDate.now();
-        return repository.buscarLotesAteData(hoje.plusDays(diasAlerta)).stream().map(l -> {
-            long dias = ChronoUnit.DAYS.between(hoje, l.getDataValidade());
-            BigDecimal original = l.getProduto().getPrecoOriginal();
-            BigDecimal comDesconto = PoliticaDesconto.precoComDesconto(original, dias);
-            int percentual = PoliticaDesconto.percentualDesconto(dias);
-
-            String status;
-            if (dias < 0) {
-                status = "VENCIDO: retirar da venda";
-            } else if (percentual > 0) {
-                status = "ATENÇÃO: vence em " + dias + " dia(s). Desconto de " + percentual + "% aplicado.";
-            } else {
-                status = "ATENÇÃO: vence em " + dias + " dia(s). Sem desconto.";
-            }
-
-            return new AlertaValidade(l.getProduto().getNome(), l.getProduto().getCategoria(),
-                    l.getProduto().getCodigoBarras(), l.getQuantidadeAtual(), l.getDataValidade(),
-                    dias, original, comDesconto, status);
-        }).toList();
+        return repository.buscarLotesAteData(hoje.plusDays(diasAlerta), pageable)
+                .map(lote -> paraAlerta(lote, hoje));
     }
 
     @Transactional(readOnly = true)
-    public List<AlertaReposicao> alertasReposicao() {
-        return repository.buscarProdutosAbaixoDoMinimo(LocalDate.now());
+    public Page<AlertaReposicao> alertasReposicao(Pageable pageable) {
+        return repository.buscarProdutosAbaixoDoMinimo(LocalDate.now(), pageable);
     }
 
-    // Aviso automático: todo dia às 8h (horário de Brasília)
-    @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
-    public void verificarEAvisar() {
-        alertasValidade().forEach(a -> log.warn("VALIDADE: {} - {}", a.produto(), a.status()));
-        alertasReposicao().forEach(a -> log.warn("REPOSIÇÃO: {} (atual {}, mínimo {})",
-                a.produto(), a.estoqueAtual(), a.estoqueMinimo()));
-        // aqui entra o envio de e-mail/WhatsApp/webhook para o gestor
+    /** Todos os alertas de validade, sem paginação (uso interno: aviso diário). */
+    @Transactional(readOnly = true)
+    public List<AlertaValidade> todosAlertasValidade() {
+        List<AlertaValidade> todos = new ArrayList<>();
+        Pageable pagina = PageRequest.of(0, TAMANHO_LOTE_INTERNO);
+        Page<AlertaValidade> atual;
+        do {
+            atual = alertasValidade(pagina);
+            todos.addAll(atual.getContent());
+            pagina = pagina.next();
+        } while (atual.hasNext());
+        return todos;
+    }
+
+    /** Todos os alertas de reposição, sem paginação (uso interno: aviso diário). */
+    @Transactional(readOnly = true)
+    public List<AlertaReposicao> todosAlertasReposicao() {
+        List<AlertaReposicao> todos = new ArrayList<>();
+        Pageable pagina = PageRequest.of(0, TAMANHO_LOTE_INTERNO);
+        Page<AlertaReposicao> atual;
+        do {
+            atual = alertasReposicao(pagina);
+            todos.addAll(atual.getContent());
+            pagina = pagina.next();
+        } while (atual.hasNext());
+        return todos;
+    }
+
+    private AlertaValidade paraAlerta(Lote lote, LocalDate hoje) {
+        long dias = ChronoUnit.DAYS.between(hoje, lote.getDataValidade());
+        BigDecimal original = lote.getProduto().getPrecoOriginal();
+        BigDecimal comDesconto = PoliticaDesconto.precoComDesconto(original, dias);
+        int percentual = PoliticaDesconto.percentualDesconto(dias);
+
+        String status;
+        if (dias < 0) {
+            status = "VENCIDO: retirar da venda";
+        } else if (percentual > 0) {
+            status = "ATENÇÃO: vence em " + dias + " dia(s). Desconto de " + percentual + "% aplicado.";
+        } else {
+            status = "ATENÇÃO: vence em " + dias + " dia(s). Sem desconto.";
+        }
+
+        return new AlertaValidade(lote.getProduto().getNome(), lote.getProduto().getCategoria(),
+                lote.getProduto().getCodigoBarras(), lote.getQuantidadeAtual(), lote.getDataValidade(),
+                dias, original, comDesconto, status);
     }
 
     // ---------- Movimentação ----------
 
     @Transactional(readOnly = true)
-    public List<Lote> listarLotes() {
-        return repository.findAll();
+    public Page<Lote> listarLotes(Pageable pageable) {
+        return repository.findAll(pageable);
     }
 
     @Transactional
